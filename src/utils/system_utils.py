@@ -2,14 +2,19 @@ import os
 import shutil
 
 def delete_folder(folder_path):
+    '''
+        Delete entire folder
+    '''
     # Use shutil.rmtree() to delete the folder and its contents
     try:
         shutil.rmtree(folder_path)
-        #print(f"Deleted folder: {folder_path}")
     except Exception as e:
         print(f"Error deleting folder: {e}")
 
 def create_folder_structure(folder_path, subfolder_name):
+    '''
+        Create a folder structure
+    '''
     
     # Check if the directory exists
     if not os.path.exists(folder_path):
@@ -31,10 +36,12 @@ def create_folder_structure(folder_path, subfolder_name):
 
 
 def delete_specific_file(file_path):
+    '''
+        Delete a single file
+    '''
     try:
         # Attempt to delete the file
         os.remove(file_path)
-        #print(f"Deleted: {file_path}")
     except FileNotFoundError:
         print(f"The file {file_path} does not exist.")
     except Exception as e:
@@ -42,6 +49,9 @@ def delete_specific_file(file_path):
 
 
 def delete_folder_files(folder_path):
+    '''
+        Delete all files in specified folder
+    '''
     # List all files and subdirectories in the folder
     for root, dirs, files in os.walk(folder_path):
         for file in files:
@@ -49,7 +59,6 @@ def delete_folder_files(folder_path):
             try:
                 # Delete the file
                 os.remove(file_path)
-                #print(f"Deleted: {file_path}")
             except Exception as e:
                 print(f"Error deleting {file_path}: {str(e)}")
 

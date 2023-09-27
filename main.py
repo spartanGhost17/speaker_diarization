@@ -33,7 +33,6 @@ def kill_thread(exit_signal, condition):
             exit_signal.value = True
             with condition:  # Acquire the lock associated with the condition
                 condition.notify_all()
-                #condition.notify_all()
             break
 
 
@@ -108,28 +107,34 @@ if __name__ == "__main__":
     while not exit_signal.value:
         with condition:
             folder_contents = os.listdir(folder_path)
-            random.shuffle(folder_contents) #shuffle sample
+            #random.shuffle(folder_contents) #shuffle sample
             if len(folder_contents) < 0:
                 print("stop run threads")
-
+                
             # Iterate over the current contents of the folder
             for item in folder_contents:
                 item_path = os.path.join(folder_path, item)
-
-                ehanced_item_path = os.path.join(ENHANCED_AUDIO_CHUNKS_PATH, item)
                 
-                if ehanced_item_path not in fifo_queue.queue:
-                    print(f"\nFile being added to queue for evaluation :-> {item_path}\n")
-                    audio_utils.enhance_audio_signal(item_path, ehanced_item_path)
-                    fifo_queue.put(ehanced_item_path)
-                    condition.notify_all()#notify all threads
+                #check if speech exists in audio
+                speech_exists = audio_utils.speech_exists(item_path)
 
-                    pool.apply_async(whisper.cont_transcrpt_work, args=(ehanced_item_path, ehanced_item_path, diarization_dict, pyannote_pipeline))
+                if speech_exists:
+                    ehanced_item_path = os.path.join(ENHANCED_AUDIO_CHUNKS_PATH, item)
+                    
+                    if ehanced_item_path not in fifo_queue.queue:
+                        print(f"\nFile being added to queue for evaluation :-> {item_path}\n")
+                        audio_utils.enhance_audio_signal(item_path, ehanced_item_path)
+                        fifo_queue.put(ehanced_item_path)
+                        condition.notify_all()#notify all threads
+
+                        pool.apply_async(whisper.cont_transcrpt_work, args=(ehanced_item_path, ehanced_item_path, diarization_dict, pyannote_pipeline))
+                        system_utils.delete_specific_file(item_path) #delete file
+                else:
+                    #no speech
                     system_utils.delete_specific_file(item_path) #delete file
 
     print("closing threads and multiprocessing")
 
-    #system_utils.delete_folder('test')
     # Close the pool
     pool.close()
 

@@ -45,7 +45,7 @@ def get_transcription_object(model, audio_file: str):
         df = pd.DataFrame.from_dict({idx: segment}, orient='index')
 
         segments_list.append(df) #might need to get rid of this
-        #print(f"segments_list {segments_list}\n\n")
+
         segment = AudioSegment(id=df['id'], start=df['start'], end=df['end'], text=df['text'], temperature=df['temperature'], avg_logprob=df['avg_logprob'], compression_ratio=df['compression_ratio'], no_speech_prob=df['no_speech_prob'])
 
         segments_obj_list.append(segment)
@@ -88,31 +88,6 @@ def transcription_without_overlapping_speakers(diarization, transcript_obj):
     return all_overlaps
 
 
-def rebalance_all_embeddings(speaker_embedding_dict):
-    # Create a list to store the filtered entries
-    filtered_entries = {}
-
-    # Define a threshold for cosine similarity
-    threshold = 0.6
-
-    # Calculate and filter entries based on cosine similarity
-    for key1, embedding_list1 in speaker_embedding_dict.items():
-        filtered_embeddings = []
-        for key2, embedding_list2 in speaker_embedding_dict.items():
-            if key1 != key2:  # Exclude self-comparison
-                similarity_scores = []
-                for emb1 in embedding_list1:
-                    for emb2 in embedding_list2:
-                        similarity = 1 - cosine_similarity(emb1, emb2) #cosine_similarity(embedding_arrays, embedding_arrays)
-                        similarity_scores.append(similarity)
-                max_similarity = max(similarity_scores)
-                if max_similarity >= threshold:
-                    filtered_embeddings.extend(embedding_list2)
-        if filtered_embeddings:
-            filtered_entries[key1] = filtered_embeddings
-
-
-
 def transcribe_new(all_text_overlaps, speaker_embedding_dict, speaker_file, embedding_model, speaker_start, speaker_stop):
 
     
@@ -133,7 +108,7 @@ def transcribe_new(all_text_overlaps, speaker_embedding_dict, speaker_file, embe
 
         if speaker_ID_cluster == -1: #new speaker discovered
             print(f"\nnew speaker discovered confidence:{1 - confidence}\n")
-            print(f"keys {speaker_embedding_dict.keys()}, len: {len(speaker_embedding_dict)}")
+            #print(f"keys {speaker_embedding_dict.keys()}, len: {len(speaker_embedding_dict)}")
             key = len(speaker_embedding_dict) + 1
             speaker_embedding_dict[key] = []
             speaker_embedding_dict[key].append(speaker_embeddings)
@@ -173,33 +148,31 @@ def transcribe_new(all_text_overlaps, speaker_embedding_dict, speaker_file, embe
 
 
 ##!!!!!!    DEPRECATED  !!!!!!
-def transcribe(file_name, model, start, end, time_counter):
-    '''
-        transcribe the audio if not silent
+#def transcribe(file_name, model, start, end, time_counter):
+#   '''
+#        transcribe the audio if not silent
+#
+#        returns start & stop time of transcription
+#    '''
+#    #print(f" transcribe {file_name} ")
+#    df = speach_activity_detection(filename=file_name)
+#    start_stop = df.iloc[:][['start', 'stop']].values
+#
+#    if (len(start_stop) >= 1) and (df.iloc[:][['start', 'stop']].values[0][1] > 0.1):
+#        current_caption = get_transcription_object(model, file_name)
+#        if(len(current_caption[1]) <= 1):
+#            print(f"start: {(start + time_counter.value)} stop: {(end + time_counter.value)} \n    speaker: {current_caption[1].iloc[0]['text']}\n")
+#        else:
+#            for _, row in current_caption[1].iterrows():
+#                print(f"start: {(float(row['start']) + time_counter.value)} stop: {(float(row['end']) + time_counter.value)} \n    speaker: {row['text']}\n")
 
-        returns start & stop time of transcription
-    '''
-    #print(f" transcribe {file_name} ")
-    df = speach_activity_detection(filename=file_name)
-    start_stop = df.iloc[:][['start', 'stop']].values
 
-    if (len(start_stop) >= 1) and (df.iloc[:][['start', 'stop']].values[0][1] > 0.1):
-        current_caption = get_transcription_object(model, file_name)
-        if(len(current_caption[1]) <= 1):
-            print(f"start: {(start + time_counter.value)} stop: {(end + time_counter.value)} \n    speaker: {current_caption[1].iloc[0]['text']}\n")
-        else:
-            for _, row in current_caption[1].iterrows():
-                print(f"start: {(float(row['start']) + time_counter.value)} stop: {(float(row['end']) + time_counter.value)} \n    speaker: {row['text']}\n")
-
-
-# Function to process a file using f3_work
 def cont_transcrpt_work(file, enhanced_file, diarization_dict, pyannote_pipeline):
     '''
         constinuous transcription worker 
         gets diarization object for file
     '''
-    #print(f"file {file} and diarization array {diarization_dict}")
-    result = get_diarization_speaker_info_df(pyannote_pipeline, enhanced_file)# Replace this with your actual processing logic to get diarization object
+    result = get_diarization_speaker_info_df(pyannote_pipeline, enhanced_file)
     diarization_dict[file] = result
 
 def check_model_available(fifo_queue, diarization_array):
@@ -215,7 +188,7 @@ def check_model_available(fifo_queue, diarization_array):
 def continous_transcription(diarization_dict, fifo_queue, exit_signal, condition, SPEAKER_SEGMENT_PATH, 
                             transcription_model, time_counter, embedding_model, speaker_embedding_dict, start_stop_tuples, 
                             clusterd_files_queue, transcriptions_record, cluster_point_cloud, cluster_files_list):
-
+    init_clusters_counter = 0
     while not exit_signal.value:#not exit_signal: not pause_event.is_set()
         with condition:
             print(f"        f4")
@@ -234,58 +207,47 @@ def continous_transcription(diarization_dict, fifo_queue, exit_signal, condition
 
                     transcriptions_record.append(all_text_overlaps)
 
-                    #start_stop_tuples_ = []
-                    #start_stop_tuples = cluster_audio_chunks(diarization_item, SPEAKER_SEGMENT_PATH, fifo_file_item)
+
                     cluster_audio_chunks(all_text_overlaps, SPEAKER_SEGMENT_PATH, fifo_file_item, start_stop_tuples, time_counter, cluster_files_list)
 
-                    #start_stop_tuples.append(start_stop_tuples_)
-
-
                         
-                        
-                    speakers_path = cluster_files_list#os.listdir(SPEAKER_SEGMENT_PATH)
+                    speakers_path = cluster_files_list
 
                     for i, path in enumerate(speakers_path):
-                        _path = path#os.path.join(SPEAKER_SEGMENT_PATH, path)
-                        #print(f"INDEX: {i} file cluster length: {len(clusterd_files_queue.queue)}")
-                        #print(f"\n is file \n{_path}   \nin queue {clusterd_files_queue.queue}  \n")
-                        #if value in queue in means clustering as well as transcription
+                        _path = path
+                        
                         if _path in clusterd_files_queue.queue:
-                            #print(f"    ******** continue file {_path} exists!!! idx {i}")
                             continue
-                        #print(f"..............list of tuples?? {start_stop_tuples} index: {i} ")
+
                         cluster_point = ClusterPoint()
                         cluster_point.add_file_path(_path)
                         
                         clusterd_files_queue.put(_path)
-                        #print(f"queue size: {len(clusterd_files_queue.queue)} index {i}\n")
 
-                        clock = int(time_counter.value/10)
-                        if clock < 3: #don't rerun for first 30 seconds (0 - 10 - 20)
-
+                        #clock = int(time_counter.value/10)
+                        if init_clusters_counter < 3: #don't rerun for first 30 seconds (0 - 10 - 20)
+                            count = init_clusters_counter
                             speaker_start = 0#start_stop_tuples[clock][0]#get speaker start #diarization_item.iloc[i]['start']
                             speaker_stop = 0#start_stop_tuples[clock][1]#get speaker stop #diarization_item.iloc[i]['stop']
                             
-                            cluster_point.add_start(start_stop_tuples[clock][0])
-                            cluster_point.add_end(start_stop_tuples[clock][1])
-                            cluster_point.add_counter(time_counter.value)#(start_stop_tuples[clock][2])
-                            #print(f"queue size: {len(clusterd_files_queue.queue)} index {i}\n")
+                            cluster_point.add_start(start_stop_tuples[count][0])
+                            cluster_point.add_end(start_stop_tuples[count][1])
+                            cluster_point.add_counter(time_counter.value)
+
                             cluster_point_cloud[_path] = cluster_point
                             
                             transcribe_new(all_text_overlaps, speaker_embedding_dict, _path, embedding_model, speaker_start, speaker_stop) #new transcription process
-                            #break
+                            init_clusters_counter += 1
                         else:
                             speaker_start = start_stop_tuples[i][0]#get speaker start #diarization_item.iloc[i]['start']
                             speaker_stop = start_stop_tuples[i][1]#get speaker stop #diarization_item.iloc[i]['stop']
                             
                             cluster_point.add_start(start_stop_tuples[i][0])
                             cluster_point.add_end(start_stop_tuples[i][1])
-                            cluster_point.add_counter(time_counter.value)#(start_stop_tuples[i][2])
+                            cluster_point.add_counter(time_counter.value)
                             cluster_point_cloud[_path] = cluster_point
-                            #transcribe(_path, transcription_model, start_time, stop_time, time_counter)
                             
                             transcribe_new(all_text_overlaps, speaker_embedding_dict, _path, embedding_model, speaker_start, speaker_stop) #new transcription process
-                            #delete_specific_file(_path)
 
 
                     # 30 seconds in (counted from 0 by jumps of 10)
@@ -309,20 +271,19 @@ def continous_transcription(diarization_dict, fifo_queue, exit_signal, condition
     print("\n kill transcription thread!")
 
 def export_transcription(transcriptions_record, cluster_point_cloud):
+    '''
+        create csv export of transcript
+    '''
     print("printing al clusters\n")
     # Get the current timestamp
     timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
 
-    # Define the CSV filename with the timestamp
-    csv_filename = f"test/transcripts/transcript_{timestamp}.csv"
+    num_speaker = 0
 
     export = []
     for _path, cluster_point in cluster_point_cloud.items():
         counter = cluster_point.get_counter()
         idx = int(counter/10)
-        #file_path = cluster_point.get_file_path()
-        #index = list(clusterd_files_queue.queue).index(file_path)
-
 
         start = cluster_point.get_start()
         end = cluster_point.get_end()
@@ -354,11 +315,15 @@ def export_transcription(transcriptions_record, cluster_point_cloud):
                 print(f"start {start} speaker {speaker_start} end {end} speaker_end {speaker_end}")
                 current_speaker = current_speaker_df
                 entry['speaker'] = f"SPEAKER_0{speaker_cluster_label}"
+                if speaker_cluster_label > num_speaker:
+                    num_speaker = speaker_cluster_label
             #if the same speaker countius but something wrong with time stamp, tag same person
             elif current_speaker == current_speaker_df:
                 print(f"same speaker issue with timestamps" )
                 current_speaker = current_speaker_df
                 entry['speaker'] = f"SPEAKER_0{speaker_cluster_label}"
+                if speaker_cluster_label > num_speaker:
+                    num_speaker = speaker_cluster_label
             else:
                 current_speaker = "UNKOWN_SPEAKER"
                 entry['speaker'] = "UNKOWN_SPEAKER"
@@ -368,6 +333,9 @@ def export_transcription(transcriptions_record, cluster_point_cloud):
     # Convert the list of dictionaries to a DataFrame
     df = pd.DataFrame(export)
     
+    # Define the CSV filename with the timestamp
+    csv_filename = f"test/transcripts/transcript_{timestamp}_{num_speaker}_speakers.csv"
+
     # Export the DataFrame to a CSV file
     df.to_csv(csv_filename, index=False)
 

@@ -27,6 +27,9 @@ CHUNKS_DIR = 'test/audio/chunks/'
 
 
 def crop_wav(file_name, output_file_name, start, end):
+    '''
+        Crop audio file in specified boundaries using start/stop
+    '''
     sound = AudioSegment.from_wav(file_name)
     
     sound = sound.set_channels(1).set_frame_rate(16000) #mono channel
@@ -39,35 +42,26 @@ def crop_wav(file_name, output_file_name, start, end):
     window.export(output_file_name, format="wav")
 
 
-    # Input .wav file path
-    #input_file_path = file_name
-
-    # Load the .wav file
-    #audio = AudioSegment.from_wav(input_file_path)
-
-    # Define the desired chunk duration in milliseconds (1 second = 1000 milliseconds)
-    #chunk_duration_ms = 1000
-
-    # Create a directory to store the cropped chunks (if it doesn't exist)
-    #output_dir = "output_chunks"
-    #os.makedirs(output_dir, exist_ok=True)
-
-    # Calculate the number of chunks required to cover the entire audio
-    #num_chunks = len(audio) // chunk_duration_ms
-
-    # Loop to crop the file into 1-second increments
-    #for i in range(num_chunks):
-    #    start_time_ms = i * chunk_duration_ms
-    #    end_time_ms = (i + 1) * chunk_duration_ms
-
-        # Crop the audio
-    #    chunk = audio[start_time_ms:end_time_ms]
-
-        # Check if the chunk duration is exactly 1 second
-    #    if len(chunk) == chunk_duration_ms:
-            # Save the cropped chunk
-    #        chunk.export(os.path.join(output_dir, f"chunk_{time.strftime('%Y%m%d_%H%M%S')}_{i}.wav"), format="wav")
-
+def speech_exists(filename):
+    '''
+        Check if speech exists in audio
+    '''
+    longest_speech = 0
+    speech_exist = False
+    speech_df = speach_activity_detection(filename=filename)
+    
+    for i, row in speech_df.iterrows():
+        start = row['start']
+        stop = row['stop']
+        speech_length = stop - start
+        if speech_length > longest_speech:
+            longest_speech = speech_length
+    
+    #if longest speech is at least 1 second
+    if(longest_speech >= 1):
+        speech_exist = True
+    
+    return speech_exist
 
 def speach_activity_detection(filename):
     '''
@@ -117,6 +111,9 @@ def speach_activity_detection(filename):
 
 
 def enhance_audio_signal(audio_path, output_path):
+    '''
+        Enhance audio and resample signal to 16000Hz
+    '''
     target_sr = 16000
 
     try:
@@ -154,14 +151,6 @@ def enhance_audio_signal(audio_path, output_path):
         print(f"Error exporting audio: {e}")
 
 
-
-####
-# save the recorded audio
-# frames
-# filename
-#
-#
-####
 def save_recorded_audio(frames, filename):
     '''
         save the recorded audio
@@ -175,11 +164,7 @@ def save_recorded_audio(frames, filename):
     wf.writeframes(b''.join(frames))
     wf.close()
 
-####
-# records continuous stream
-# and create 10 sec segements until recording stops
-#
-####
+
 def start_continuous_recording(exit_signal, condition):
     '''
         records continuous stream
@@ -217,7 +202,7 @@ def start_continuous_recording(exit_signal, condition):
     stream.close()
     audio.terminate()
 
-
+#@Deprecated
 def record_audio_chunk(chunk_index):
     WAVE_OUTPUT_FILENAME = f"audio/chunks/{chunk_index}_voice_chunk.wav"
     p = pyaudio.PyAudio()
@@ -249,10 +234,7 @@ def record_audio_chunk(chunk_index):
     wf.writeframes(b''.join(frames))
     wf.close()
 
-###
-#
-#
-###
+
 def concatenate_stream(path_file1:str, path_file2:str, output_file):
     audiofile1 = path_file1
     audiofile2 = path_file2
@@ -275,20 +257,21 @@ def concatenate_stream(path_file1:str, path_file2:str, output_file):
 
     result.close()
 
-###
-# download mp3 and write to local file
-#
-###
+
 def download_mp3(audio_url:str, file_name:str = None):
+    '''
+        download mp3 and write to local file
+
+    '''
 
     #download file
     doc = requests.get(audio_url)
     if file_name:
         tempfile_name = file_name
-        #with open(DOWNLOAD_PODCAST_PATH+tempfile_name, 'wb') as file:
+        
         with open(tempfile_name, 'wb') as file:
             file.write(doc.content)
-        #raise ValueError(f'This part of the function is not yet implemented')
+
     else:
         #create temp file
         tempWaveFile = tempfile.NamedTemporaryFile(suffix=".mp3", delete=False)

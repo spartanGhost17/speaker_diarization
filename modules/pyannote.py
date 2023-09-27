@@ -44,6 +44,9 @@ def get_embedding_model(pyannote_access_token):
     return model
 
 def get_speaker_embedding_vector(model, file_path):
+    '''
+        convert voice signal into vector 
+    '''
     inference = Inference(model, window="whole")
     speaker_embedding = inference(file_path)
     return speaker_embedding
@@ -78,35 +81,33 @@ def get_diarization_speaker_info_df(pipeline, audio_path):
         df = pd.DataFrame.from_dict({idx: segment_info}, orient='index')
         segments_info_list.append(df)
 
-        #print(f"start={turn.start:.1f}s stop={turn.end:.1f}s speaker_{speaker}")
         idx += 1
     diarized_speaker_info_df = pd.concat(segments_info_list, axis=0)
-    #print(f"         returned the object from get_diarization_speaker_info_df {diarized_speaker_info_df} \n")
 
     return diarized_speaker_info_df
 
 def cluster_audio_chunks(diarized_speaker_info_df, SPEAKER_SEGMENT_PATH, normalized_audio_path, 
                         start_stop_tuples, time_counter, cluster_files_list):
+    '''
+        get a voice sample for each speaker defined in diarized_speaker_info_df
+    '''
 
-    #speakers = diarized_speaker_info_df['speaker'].values
     speaker = None
     start = None
     stop = None
     CROPING_CONSTANT = 2.5
     start_stops = []
     if not diarized_speaker_info_df.empty:
-        start = diarized_speaker_info_df.iloc[0]['speaker_start']#['start']
+        start = diarized_speaker_info_df.iloc[0]['speaker_start']
         stop = diarized_speaker_info_df.iloc[0]['speaker_end']
         speaker = diarized_speaker_info_df.iloc[0]['speaker']
 
-    #entry_count = diarized_speaker_info_df.shape[0]
-    #last_entry = diarized_speaker_info_df.iloc[entry_count-1, :]
     path_items = normalized_audio_path.split('/')
     original_file = path_items[len(path_items)-1]
-    for i, row in diarized_speaker_info_df.iterrows():#enumerate(speakers):
+    for i, row in diarized_speaker_info_df.iterrows():
         folder_path = f"{SPEAKER_SEGMENT_PATH}"
-        current_start = row['speaker_start']#['start']#diarized_speaker_info_df.iloc[i]['start']
-        current_stop = row['speaker_end']#['end']#diarized_speaker_info_df.iloc[i]['stop']
+        current_start = row['speaker_start']
+        current_stop = row['speaker_end']
         current_speaker = row['speaker']
 
         if speaker == current_speaker:
@@ -115,7 +116,7 @@ def cluster_audio_chunks(diarized_speaker_info_df, SPEAKER_SEGMENT_PATH, normali
             #speaker changed crop audio of previous speaker
             speaker = current_speaker
             output_file_name = f"{folder_path}crop_normal_{original_file}__{i}_{time.strftime('%Y%m%d_%H%M%S')}.wav"
-            #print(f"should crop normal speaker has changed")
+
             if float(stop) - float(start) >= float(CROPING_CONSTANT):
                 start_stops.append((start, current_stop, time_counter.value))
                 start_stop_tuples.append((start, current_stop, time_counter.value))
@@ -123,24 +124,19 @@ def cluster_audio_chunks(diarized_speaker_info_df, SPEAKER_SEGMENT_PATH, normali
                 crop_wav(normalized_audio_path, output_file_name, start, float(start) + CROPING_CONSTANT)#, stop)
 
             start = current_start
-            stop = current_stop
-            
+            stop = current_stop      
 
         # crop is last entry
         if (speaker == current_speaker) and (i == len(diarized_speaker_info_df) - 1):
             
             output_file_name = f"{folder_path}crop_at_end_{original_file}_{speaker}__{i}_{time.strftime('%Y%m%d_%H%M%S')}.wav"
-            #print(f"should crop same speaker from start to end {(start, current_stop)}")
+
             if float(stop) - float(start) >= float(CROPING_CONSTANT):
-                #if stop - 10 > 0:
-                #    stop = 9.99
+
                 print(f"should crop end {(start, current_stop, time_counter.value)}")
-                #start_stops.append((start, current_stop, time_counter.value))
                 start_stop_tuples.append((start, current_stop, time_counter.value))
                 crop_wav(normalized_audio_path, output_file_name, start, float(start)+CROPING_CONSTANT)#, stop)
                 cluster_files_list.append(output_file_name)
-    #print(f"==>? start_stop_tuples {start_stop_tuples}")
-    #return start_stops # return start and stop time tuples
         
 
 def init_embeddings_cluster(CLUSTER_ROOT, embedding_model, cluster_point_cloud):
@@ -152,8 +148,7 @@ def init_embeddings_cluster(CLUSTER_ROOT, embedding_model, cluster_point_cloud):
     embeddings_dict = {}
     for i, file in enumerate(cluster_files):
         file_path = os.path.join(CLUSTER_ROOT, file)
-        #if i >=3:
-        #    break
+
         if file_path not in embeddings_dict:
             embeddings_dict[file_path] = get_speaker_embedding_vector(embedding_model, file_path)
         
@@ -190,7 +185,10 @@ def init_embeddings_cluster(CLUSTER_ROOT, embedding_model, cluster_point_cloud):
     return clustered_embeddings
 
 def get_speaker_key(speaker_embeddings, clustered_embeddings_dict):
-    # Compute cosine similarity for each pair of arrays
+    '''
+        Compute cosine similarity for each pair of arrays
+
+    '''
     dict_after_clustering = {}
 
     dict_after_clustering[2] = speaker_embeddings#get_speaker_embedding_vector(embedding_model, file_path)
@@ -212,7 +210,7 @@ def get_speaker_key(speaker_embeddings, clustered_embeddings_dict):
     max_index = np.argmax(similarities)
 
     # if similarity score is less than 60% this is most likely a new speaker
-    if similarities[max_index] < 0.6: 
+    if similarities[max_index] < 0.55:#0.6: 
         max_index = -1 
 
     return max_index, similarities[max_index]
